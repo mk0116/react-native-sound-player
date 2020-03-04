@@ -4,6 +4,8 @@ import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnPreparedListener;
 import android.net.Uri;
+import android.os.Environment;
+
 import java.io.File;
 
 import java.io.IOException;
@@ -19,6 +21,10 @@ import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.bridge.Arguments;
 import com.facebook.react.bridge.Promise;
 
+import static android.media.MediaPlayer.SEEK_CLOSEST;
+import static android.media.MediaPlayer.SEEK_CLOSEST_SYNC;
+import static android.media.MediaPlayer.SEEK_NEXT_SYNC;
+
 
 public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
 
@@ -26,6 +32,8 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
   public final static String EVENT_FINISHED_LOADING = "FinishedLoading";
   public final static String EVENT_FINISHED_LOADING_FILE = "FinishedLoadingFile";
   public final static String EVENT_FINISHED_LOADING_URL = "FinishedLoadingURL";
+  public final static String EVENT_FINISHED_SEEKING = "FinishedSeeking";
+  public final static String EVENT_FINISHED_LOADING_FROM_PATH = "FinishedLoadingFileFromPath";
 
   private final ReactApplicationContext reactContext;
   private MediaPlayer mediaPlayer;
@@ -65,6 +73,11 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
   }
 
   @ReactMethod
+  public void loadPath(String path) throws IOException {
+    mountSoundFileFrom(path);
+  }
+
+  @ReactMethod
   public void pause() throws IllegalStateException {
     if (this.mediaPlayer != null) {
       this.mediaPlayer.pause();
@@ -89,7 +102,7 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
   @ReactMethod
   public void seek(float seconds) throws IllegalStateException {
     if (this.mediaPlayer != null) {
-      this.mediaPlayer.seekTo((int)seconds * 1000);
+      this.mediaPlayer.seekTo((int)(seconds * 1000), SEEK_CLOSEST);
     }
   }
 
@@ -103,7 +116,7 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
 
   @ReactMethod
   public void getInfo(
-      Promise promise) {
+          Promise promise) {
     WritableMap map = Arguments.createMap();
     map.putDouble("currentTime", this.mediaPlayer.getCurrentPosition() / 1000.0);
     map.putDouble("duration", this.mediaPlayer.getDuration() / 1000.0);
@@ -111,11 +124,11 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
   }
 
   private void sendEvent(ReactApplicationContext reactContext,
-                       String eventName,
-                       @Nullable WritableMap params) {
+                         String eventName,
+                         @Nullable WritableMap params) {
     reactContext
-        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
-        .emit(eventName, params);
+            .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+            .emit(eventName, params);
   }
 
   private void mountSoundFile(String name, String type) throws IOException {
@@ -129,14 +142,14 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
       }
 
       this.mediaPlayer.setOnCompletionListener(
-        new OnCompletionListener() {
-          @Override
-          public void onCompletion(MediaPlayer arg0) {
-            WritableMap params = Arguments.createMap();
-            params.putBoolean("success", true);
-            sendEvent(getReactApplicationContext(), EVENT_FINISHED_PLAYING, params);
-          }
-      });
+              new OnCompletionListener() {
+                @Override
+                public void onCompletion(MediaPlayer arg0) {
+                  WritableMap params = Arguments.createMap();
+                  params.putBoolean("success", true);
+                  sendEvent(getReactApplicationContext(), EVENT_FINISHED_PLAYING, params);
+                }
+              });
     } else {
       Uri uri;
       int soundResID = getReactApplicationContext().getResources().getIdentifier(name, "raw", getReactApplicationContext().getPackageName());
@@ -162,6 +175,34 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
     sendEvent(getReactApplicationContext(), EVENT_FINISHED_LOADING_FILE, onFinishedLoadingFileParams);
   }
 
+  private void mountSoundFileFrom(String path) throws IOException {
+    Uri uri = Uri.parse(path);
+    if (this.mediaPlayer == null) {
+      this.mediaPlayer = MediaPlayer.create(getCurrentActivity(), uri);
+
+      this.mediaPlayer.setOnCompletionListener(
+              new OnCompletionListener() {
+                @Override
+                public void onCompletion(MediaPlayer arg0) {
+                  WritableMap params = Arguments.createMap();
+                  params.putBoolean("success", true);
+                  sendEvent(getReactApplicationContext(), EVENT_FINISHED_PLAYING, params);
+                }
+              });
+    } else {
+      this.mediaPlayer.reset();
+      this.mediaPlayer.setDataSource(getCurrentActivity(), uri);
+      this.mediaPlayer.prepare();
+    }
+
+    WritableMap params = Arguments.createMap();
+    params.putBoolean("success", true);
+    sendEvent(getReactApplicationContext(), EVENT_FINISHED_LOADING, params);
+    WritableMap onFinishedLoadingFileParams = Arguments.createMap();
+    onFinishedLoadingFileParams.putBoolean("success", true);
+    sendEvent(getReactApplicationContext(), EVENT_FINISHED_LOADING_FROM_PATH, onFinishedLoadingFileParams);
+  }
+
   private Uri getUriFromFile(String name, String type) {
     String folder = getReactApplicationContext().getFilesDir().getAbsolutePath();
     String file = name + "." + type;
@@ -182,30 +223,38 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
       Uri uri = Uri.parse(url);
       this.mediaPlayer = MediaPlayer.create(getCurrentActivity(), uri);
       this.mediaPlayer.setOnCompletionListener(
-        new OnCompletionListener() {
-          @Override
-          public void onCompletion(MediaPlayer arg0) {
-            WritableMap params = Arguments.createMap();
-            params.putBoolean("success", true);
-            sendEvent(getReactApplicationContext(), EVENT_FINISHED_PLAYING, params);
-          }
+              new OnCompletionListener() {
+                @Override
+                public void onCompletion(MediaPlayer arg0) {
+                  WritableMap params = Arguments.createMap();
+                  params.putBoolean("success", true);
+                  sendEvent(getReactApplicationContext(), EVENT_FINISHED_PLAYING, params);
+                }
+              });
+      this.mediaPlayer.setOnSeekCompleteListener(new MediaPlayer.OnSeekCompleteListener() {
+        @Override
+        public void onSeekComplete(MediaPlayer mp) {
+          WritableMap params = Arguments.createMap();
+          params.putBoolean("success", true);
+          sendEvent(getReactApplicationContext(), EVENT_FINISHED_SEEKING, params);
+        }
       });
       this.mediaPlayer.setOnPreparedListener(
-        new OnPreparedListener() {
-          @Override
-          public void onPrepared(MediaPlayer mediaPlayer) {
-            WritableMap onFinishedLoadingURLParams = Arguments.createMap();
-            onFinishedLoadingURLParams.putBoolean("success", true);
-            onFinishedLoadingURLParams.putString("url", url);
-            sendEvent(getReactApplicationContext(), EVENT_FINISHED_LOADING_URL, onFinishedLoadingURLParams);
-          }
-        }
+              new OnPreparedListener() {
+                @Override
+                public void onPrepared(MediaPlayer mediaPlayer) {
+                  WritableMap onFinishedLoadingURLParams = Arguments.createMap();
+                  onFinishedLoadingURLParams.putBoolean("success", true);
+                  onFinishedLoadingURLParams.putString("url", url);
+                  sendEvent(getReactApplicationContext(), EVENT_FINISHED_LOADING_URL, onFinishedLoadingURLParams);
+                }
+              }
       );
     } else {
       Uri uri = Uri.parse(url);
       this.mediaPlayer.reset();
       this.mediaPlayer.setDataSource(getCurrentActivity(), uri);
-      this.mediaPlayer.prepareAsync();
+      this.mediaPlayer.prepare();
     }
     WritableMap params = Arguments.createMap();
     params.putBoolean("success", true);

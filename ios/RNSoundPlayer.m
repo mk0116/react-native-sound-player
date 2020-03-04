@@ -9,9 +9,10 @@
 @implementation RNSoundPlayer
 
 static NSString *const EVENT_FINISHED_LOADING = @"FinishedLoading";
-static NSString *const EVENT_FINISHED_LOADING_FILE = @"FinishedLoadingFile";
+static NSString *const EVENT_FINISHED_LOADING_FROM_PATH = @"FinishedLoadingFileFromPath";
 static NSString *const EVENT_FINISHED_LOADING_URL = @"FinishedLoadingURL";
 static NSString *const EVENT_FINISHED_PLAYING = @"FinishedPlaying";
+static NSString *const EVENT_FINISHED_SEEKING = @"FinishedSeeking";
 
 
 RCT_EXPORT_METHOD(playUrl:(NSString *)url) {
@@ -23,17 +24,12 @@ RCT_EXPORT_METHOD(loadUrl:(NSString *)url) {
     [self prepareUrl:url];
 }
 
-RCT_EXPORT_METHOD(playSoundFile:(NSString *)name ofType:(NSString *)type) {
-    [self mountSoundFile:name ofType:type];
-    [self.player play];
-}
-
-RCT_EXPORT_METHOD(loadSoundFile:(NSString *)name ofType:(NSString *)type) {
-    [self mountSoundFile:name ofType:type];
+RCT_EXPORT_METHOD(loadPath:(NSString *)path) {
+    [self mountSoundFileFrom:path];
 }
 
 - (NSArray<NSString *> *)supportedEvents {
-    return @[EVENT_FINISHED_PLAYING, EVENT_FINISHED_LOADING, EVENT_FINISHED_LOADING_URL, EVENT_FINISHED_LOADING_FILE];
+    return @[EVENT_FINISHED_SEEKING, EVENT_FINISHED_PLAYING, EVENT_FINISHED_LOADING, EVENT_FINISHED_LOADING_URL, EVENT_FINISHED_LOADING_FROM_PATH];
 }
 
 RCT_EXPORT_METHOD(pause) {
@@ -64,11 +60,14 @@ RCT_EXPORT_METHOD(stop) {
 }
 
 RCT_EXPORT_METHOD(seek:(float)seconds) {
-    if (self.player != nil) {
-        self.player.currentTime = seconds;
-    }
-    if (self.avPlayer != nil) {
-        [self.avPlayer seekToTime: CMTimeMakeWithSeconds(seconds, 1.0)];
+    if (self.player != nil || self.avPlayer != nil) {
+        if (self.player != nil) {
+            self.player.currentTime = seconds;
+        }
+        if (self.avPlayer != nil) {
+            [self.avPlayer seekToTime: CMTimeMakeWithSeconds(seconds, 1.0)];
+        }
+        [self sendEventWithName:EVENT_FINISHED_SEEKING body:@{@"success": [NSNumber numberWithBool:true]}];
     }
 }
 
@@ -122,26 +121,17 @@ RCT_REMAP_METHOD(getInfo,
     [self sendEventWithName:EVENT_FINISHED_PLAYING body:@{@"success": [NSNumber numberWithBool:TRUE]}];
 }
 
-- (void) mountSoundFile:(NSString *)name ofType:(NSString *)type {
+- (void) mountSoundFileFrom:(NSString *)path {
     if (self.avPlayer) {
         self.avPlayer = nil;
     }
-
-    NSString *soundFilePath = [[NSBundle mainBundle] pathForResource:name ofType:type];
-
-    if (soundFilePath == nil) {
-        NSArray *paths = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,NSUserDomainMask, YES);
-        NSString *documentsDirectory = [paths objectAtIndex:0];
-        soundFilePath = [NSString stringWithFormat:@"%@.%@", [documentsDirectory stringByAppendingPathComponent:[NSString stringWithFormat:@"%@",name]], type];
-    }
-
-    NSURL *soundFileURL = [NSURL fileURLWithPath:soundFilePath];
-    self.player = [[AVAudioPlayer alloc] initWithContentsOfURL:soundFileURL error:nil];
+    NSURL *soundFileURL = [NSURL URLWithString:[path stringByReplacingOccurrencesOfString:@"file://" withString:@""]];
+    self.player = [[AVAudioPlayer alloc]  initWithContentsOfURL:soundFileURL error:nil];
     [self.player setDelegate:self];
     [self.player setNumberOfLoops:0];
     [self.player prepareToPlay];
     [self sendEventWithName:EVENT_FINISHED_LOADING body:@{@"success": [NSNumber numberWithBool:true]}];
-    [self sendEventWithName:EVENT_FINISHED_LOADING_FILE body:@{@"success": [NSNumber numberWithBool:true], @"name": name, @"type": type}];
+    [self sendEventWithName:EVENT_FINISHED_LOADING_FROM_PATH body:@{@"success": [NSNumber numberWithBool:true]}];
 }
 
 - (void) prepareUrl:(NSString *)url {

@@ -20,6 +20,10 @@ export default {
     RNSoundPlayer.loadSoundFile(name, type)
   },
 
+  loadPath: (path: string) => {
+    RNSoundPlayer.loadPath(path)
+  },
+
   playUrl: (url: string) => {
     RNSoundPlayer.playUrl(url)
   },
@@ -52,7 +56,7 @@ export default {
     )
   },
 
-  addEventListener: (eventName: 'FinishedLoading' | 'FinishedPlaying' | 'FinishedLoadingURL' | 'FinishedLoadingFile', callback: Function) => _soundPlayerEmitter.addListener(eventName, callback),
+  addEventListener: (eventName: 'FinishedLoading' | 'FinishedPlaying' | 'FinishedLoadingURL' | 'FinishedLoadingFile'| 'FinishedLoadingFileFromPath' | 'FinishedSeeking', callback: Function) => _soundPlayerEmitter.addListener(eventName, callback),
 
   play: () => {
     // play and resume has the exact same implementation natively
