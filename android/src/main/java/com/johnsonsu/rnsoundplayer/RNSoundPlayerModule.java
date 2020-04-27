@@ -102,6 +102,12 @@ public class RNSoundPlayerModule extends ReactContextBaseJavaModule {
   @ReactMethod
   public void seek(float seconds) throws IllegalStateException {
     if (this.mediaPlayer != null) {
+      if (this.mediaPlayer.getCurrentPosition() == seconds) {
+        WritableMap params = Arguments.createMap();
+        params.putBoolean("success", true);
+        sendEvent(getReactApplicationContext(), EVENT_FINISHED_SEEKING, params);
+        return;
+      }
       this.mediaPlayer.seekTo((int)(seconds * 1000), SEEK_CLOSEST);
     }
   }
