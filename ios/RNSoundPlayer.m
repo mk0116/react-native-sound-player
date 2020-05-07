@@ -71,6 +71,36 @@ RCT_EXPORT_METHOD(seek:(float)seconds) {
     }
 }
 
+RCT_EXPORT_METHOD(seekAndPlay:(int)startMs duration:(int)durationMs) {
+    float seconds = (float)startMs / 1000.0;
+    float durationSeconds = (float)durationMs / 1000.0;
+    if (self.player != nil || self.avPlayer != nil) {
+        if (self.player != nil) {
+            self.player.currentTime = seconds;
+        }
+        if (self.avPlayer != nil) {
+            [self.avPlayer seekToTime: CMTimeMakeWithSeconds(seconds, 1.0)];
+        }
+        [self sendEventWithName:EVENT_FINISHED_SEEKING body:@{@"success": [NSNumber numberWithBool:true]}];
+        if (self.player != nil) {
+            [self.player play];
+        }
+        if (self.avPlayer != nil) {
+            [self.avPlayer play];
+        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(durationSeconds  * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (self.player != nil) {
+                [self.player pause];
+            }
+            if (self.avPlayer != nil) {
+                [self.avPlayer pause];
+            }
+            [self sendEventWithName:EVENT_FINISHED_PLAYING body:@{@"success": [NSNumber numberWithBool:TRUE]}];
+        });
+    }
+}
+
+
 RCT_EXPORT_METHOD(setSpeaker:(BOOL) on) {
     AVAudioSession *session = [AVAudioSession sharedInstance];
     if (on) {
@@ -141,6 +171,7 @@ RCT_REMAP_METHOD(getInfo,
     NSURL *soundURL = [NSURL URLWithString:url];
     self.avPlayer = [[AVPlayer alloc] initWithURL:soundURL];
     [self.player prepareToPlay];
+    
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(itemDidFinishPlaying:) name:AVPlayerItemDidPlayToEndTimeNotification object:nil];
 
     [self sendEventWithName:EVENT_FINISHED_LOADING body:@{@"success": [NSNumber numberWithBool:true]}];
