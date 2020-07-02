@@ -79,6 +79,10 @@ export default {
     RNSoundPlayer.seek(seconds)
   },
 
+  seekAndPlay: (seconds: number, duration: number) => {
+    RNSoundPlayer.seekAndPlay(seconds, duration)
+  },
+
   setVolume: (volume: number) => {
     RNSoundPlayer.setVolume(volume)
   },
